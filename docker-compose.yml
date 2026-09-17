@@ -7,7 +7,7 @@ services:
       POSTGRES_PASSWORD: djq
       POSTGRES_DB: djq_dev
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./scripts/init-test-db.sql:/docker-entrypoint-initdb.d/10-init-test-db.sql:ro
