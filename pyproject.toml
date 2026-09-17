@@ -1,0 +1,58 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "djq"
+version = "0.1.0"
+description = "A durable, Postgres-backed job queue with a FastAPI control surface"
+requires-python = ">=3.11"
+dependencies = []          # kept in requirements.txt
+
+[tool.setuptools]
+packages = ["djq"]
+
+# ---------------------------------------------------------------------------
+# ruff: linting and formatting
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes: unused imports, undefined names
+    "I",    # import sorting
+    "UP",   # flag outdated Python idioms
+    "B",    # common bug patterns
+    "ASYNC",# async-specific mistakes
+    "SIM",  # needless complexity
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Alembic generates these; don't fight its style.
+"alembic/versions/*" = ["E501"]
+
+# ---------------------------------------------------------------------------
+# mypy: type checking
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.11"
+files = ["djq"]
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_return_any = true
+no_implicit_optional = true
+check_untyped_defs = true
+
+# ---------------------------------------------------------------------------
+# pytest
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-q --strict-markers"
+markers = [
+    "slow: tests that take more than a second (concurrency, chaos tests)",
+]
