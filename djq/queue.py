@@ -192,3 +192,35 @@ async def fail(
     )
     row = result.mappings().first()
     return dict(row) if row is not None else None
+
+RENEW_SQL = text("""
+    UPDATE jobs
+    SET lease_expires_at = now() + make_interval(secs => :lease_seconds),
+        updated_at       = now()
+    WHERE id = :job_id
+      AND status = 'running'
+      AND locked_by = :worker_id
+    RETURNING id
+""")
+
+
+async def renew_lease(
+    session: AsyncSession,
+    job_id: int,
+    worker_id: str,
+    lease_seconds: float | None = None,
+) -> bool:
+    """Push the lease further out. False means this worker lost the job."""
+    settings = get_settings()
+    result = await session.execute(
+        RENEW_SQL,
+        {
+            "job_id": job_id,
+            "worker_id": worker_id,
+            "lease_seconds": (
+                lease_seconds if lease_seconds is not None
+                else settings.lease_seconds
+            ),
+        },
+    )
+    return result.first() is not None
