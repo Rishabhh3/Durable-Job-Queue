@@ -115,3 +115,80 @@ async def enqueue(
         FIND_BY_KEY_SQL, {"idempotency_key": idempotency_key}
     )
     return existing.scalar_one()
+
+COMPLETE_SQL = text("""
+    UPDATE jobs
+    SET status           = 'succeeded',
+        finished_at      = now(),
+        locked_by        = NULL,
+        lease_expires_at = NULL,
+        last_error       = NULL,
+        updated_at       = now()
+    WHERE id = :job_id
+      AND status = 'running'
+      AND locked_by = :worker_id
+    RETURNING id
+""")
+
+
+FAIL_SQL = text("""
+    UPDATE jobs
+    SET status = CASE
+            WHEN attempts >= max_attempts THEN 'dead'
+            ELSE 'pending'
+        END,
+        run_at = CASE
+            WHEN attempts >= max_attempts THEN run_at
+            ELSE now() + make_interval(secs => least(
+                power(:backoff_base, attempts),
+                :backoff_max
+            ))
+        END,
+        finished_at = CASE
+            WHEN attempts >= max_attempts THEN now()
+            ELSE NULL
+        END,
+        last_error       = :error,
+        locked_by        = NULL,
+        lease_expires_at = NULL,
+        updated_at       = now()
+    WHERE id = :job_id
+      AND status = 'running'
+      AND locked_by = :worker_id
+    RETURNING id, status, run_at
+""")
+
+
+async def complete(session: AsyncSession, job_id: int, worker_id: str) -> bool:
+    """Mark a job done. Returns False if this worker no longer holds it."""
+    result = await session.execute(
+        COMPLETE_SQL, {"job_id": job_id, "worker_id": worker_id}
+    )
+    return result.first() is not None
+
+
+async def fail(
+    session: AsyncSession,
+    job_id: int,
+    worker_id: str,
+    error: str,
+) -> dict | None:
+    """Record a failure.
+
+    Puts the job back in the queue with a growing delay, or marks it dead
+    if it has used up its attempts. Returns None if this worker no longer
+    holds the job.
+    """
+    settings = get_settings()
+    result = await session.execute(
+        FAIL_SQL,
+        {
+            "job_id": job_id,
+            "worker_id": worker_id,
+            "error": error[:5000],
+            "backoff_base": settings.backoff_base_seconds,
+            "backoff_max": settings.backoff_max_seconds,
+        },
+    )
+    row = result.mappings().first()
+    return dict(row) if row is not None else None

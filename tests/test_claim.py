@@ -7,7 +7,7 @@ import asyncio
 import pytest
 
 from djq.db import get_sessionmaker
-from djq.queue import claim, enqueue
+from djq.queue import claim, complete, enqueue, fail
 
 
 async def test_claim_returns_a_job():
@@ -90,3 +90,52 @@ async def test_eight_workers_never_claim_the_same_job():
     # And more than one worker actually did something, or the test proved
     # nothing about concurrency.
     assert sum(1 for r in results if r) > 1
+
+    async def test_complete_marks_job_succeeded():
+        sessionmaker = get_sessionmaker()
+    async with sessionmaker() as session:
+        job_id = await enqueue(session, "work")
+        await session.commit()
+
+    async with sessionmaker() as session:
+        claimed = await claim(session, worker_id="w1", limit=1)
+        ok = await complete(session, claimed[0]["id"], worker_id="w1")
+        await session.commit()
+
+    assert ok is True
+
+
+async def test_complete_fails_if_worker_lost_the_job():
+    """A worker that lost its lease must not be able to report success."""
+    sessionmaker = get_sessionmaker()
+    async with sessionmaker() as session:
+        job_id = await enqueue(session, "work")
+        await session.commit()
+
+    async with sessionmaker() as session:
+        claimed = await claim(session, worker_id="w1", limit=1)
+        # A different worker tries to complete it.
+        ok = await complete(session, claimed[0]["id"], worker_id="w2")
+        await session.commit()
+
+    assert ok is False
+
+
+async def test_failure_reschedules_then_goes_dead():
+    """Fail a job until it runs out of attempts."""
+    sessionmaker = get_sessionmaker()
+    async with sessionmaker() as session:
+        await enqueue(session, "flaky", max_attempts=2)
+        await session.commit()
+
+    # First failure: back to pending.
+    async with sessionmaker() as session:
+        claimed = await claim(session, worker_id="w1", limit=1)
+        result = await fail(session, claimed[0]["id"], "w1", "boom")
+        await session.commit()
+    assert result["status"] == "pending"
+
+    # It's scheduled in the future, so it can't be claimed right now.
+    async with sessionmaker() as session:
+        assert await claim(session, worker_id="w1", limit=1) == []
+        await session.commit()
