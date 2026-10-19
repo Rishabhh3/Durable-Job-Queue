@@ -224,3 +224,111 @@ async def renew_lease(
         },
     )
     return result.first() is not None
+# --------------------------------------------------------------- read side
+#
+# Everything below is for the HTTP layer in api.py. None of it is on the
+# worker's hot path, so these favour being easy to read over being fast.
+
+GET_JOB_SQL = text("""
+    SELECT *
+    FROM jobs
+    WHERE id = :job_id
+""")
+
+
+async def get_job(session: AsyncSession, job_id: int) -> dict | None:
+    """One job as a plain dict, or None if there's no such id."""
+    result = await session.execute(GET_JOB_SQL, {"job_id": job_id})
+    row = result.mappings().first()
+    return dict(row) if row is not None else None
+
+
+LIST_DEAD_SQL = text("""
+    SELECT *
+    FROM jobs
+    WHERE status = 'dead'
+    ORDER BY finished_at DESC NULLS LAST, id DESC
+    LIMIT :limit
+    OFFSET :offset
+""")
+
+
+async def list_dead(
+    session: AsyncSession,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[dict]:
+    """The dead-letter queue, most recently died first."""
+    result = await session.execute(
+        LIST_DEAD_SQL, {"limit": limit, "offset": offset}
+    )
+    return [dict(row) for row in result.mappings()]
+
+
+# Resets attempts to 0, so a requeued job gets its full budget again rather
+# than dying on the first failure. The status guard means this is safe to
+# call twice: the second call matches no row and returns False.
+REQUEUE_SQL = text("""
+    UPDATE jobs
+    SET status           = 'pending',
+        attempts         = 0,
+        run_at           = now(),
+        locked_by        = NULL,
+        lease_expires_at = NULL,
+        last_error       = NULL,
+        finished_at      = NULL,
+        updated_at       = now()
+    WHERE id = :job_id
+      AND status = 'dead'
+    RETURNING id
+""")
+
+
+async def requeue(session: AsyncSession, job_id: int) -> bool:
+    """Send a dead job back to the queue. False if it wasn't dead."""
+    result = await session.execute(REQUEUE_SQL, {"job_id": job_id})
+    return result.first() is not None
+
+
+# One pass over the table. count(*) FILTER is Postgres' way of counting
+# several different things without scanning several times.
+STATS_SQL = text("""
+    SELECT
+        count(*) FILTER (WHERE status = 'pending')              AS pending,
+        count(*) FILTER (WHERE status = 'pending'
+                           AND run_at <= now())                 AS ready_now,
+        count(*) FILTER (WHERE status = 'running')              AS running,
+        count(*) FILTER (WHERE status = 'succeeded')            AS succeeded,
+        count(*) FILTER (WHERE status = 'dead')                 AS dead,
+        count(*) FILTER (WHERE status = 'running'
+                           AND lease_expires_at < now())        AS awaiting_reaper,
+        COALESCE(
+            EXTRACT(EPOCH FROM (
+                now() - min(run_at) FILTER (WHERE status = 'pending'
+                                              AND run_at <= now())
+            )),
+            0
+        )                                                       AS oldest_wait_seconds,
+        count(*) FILTER (WHERE attempts > 1)                    AS retried,
+        COALESCE(
+            count(*) FILTER (WHERE attempts > 1)::float
+                / NULLIF(count(*) FILTER (WHERE attempts > 0), 0),
+            0
+        )                                                       AS retry_rate
+    FROM jobs
+""")
+
+
+async def stats(session: AsyncSession) -> dict:
+    """A snapshot of the queue for monitoring.
+
+    `oldest_wait_seconds` is the one to alert on: it's how long the job at
+    the front of the queue has been waiting past its run_at. Queue depth
+    alone can't tell a busy queue from a stuck one, this can.
+
+    `retry_rate` is the share of started jobs that needed more than one
+    attempt, so a job still sitting in the queue doesn't drag it down.
+    """
+    result = await session.execute(STATS_SQL)
+    row = result.mappings().one()
+    return dict(row)
