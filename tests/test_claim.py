@@ -91,10 +91,11 @@ async def test_eight_workers_never_claim_the_same_job():
     # nothing about concurrency.
     assert sum(1 for r in results if r) > 1
 
-    async def test_complete_marks_job_succeeded():
-        sessionmaker = get_sessionmaker()
+
+async def test_complete_marks_job_succeeded():
+    sessionmaker = get_sessionmaker()
     async with sessionmaker() as session:
-        job_id = await enqueue(session, "work")
+        await enqueue(session, "work")
         await session.commit()
 
     async with sessionmaker() as session:
@@ -109,7 +110,7 @@ async def test_complete_fails_if_worker_lost_the_job():
     """A worker that lost its lease must not be able to report success."""
     sessionmaker = get_sessionmaker()
     async with sessionmaker() as session:
-        job_id = await enqueue(session, "work")
+        await enqueue(session, "work")
         await session.commit()
 
     async with sessionmaker() as session:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import os
 import random
@@ -126,10 +127,8 @@ async def run(worker_id: str | None = None) -> None:
                 # workers don't all wake at the same instant.
                 wobble = 1 + random.uniform(0, settings.poll_jitter)
                 delay = settings.poll_interval_seconds * wobble
-                try:
+                with contextlib.suppress(TimeoutError):
                     await asyncio.wait_for(shutdown.wait(), timeout=delay)
-                except TimeoutError:
-                    pass
                 continue
 
             for job in jobs:

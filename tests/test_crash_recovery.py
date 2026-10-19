@@ -89,9 +89,9 @@ async def _row(job_id: int):
         return result.one()
 
 
-async def _wait_for(job_id: int, check, timeout: float, what: str):
+async def _wait_for(job_id: int, check, within: float, what: str):
     """Poll the row until check(row) is true. Fail the test if it never is."""
-    deadline = time.monotonic() + timeout
+    deadline = time.monotonic() + within
     last = None
     while time.monotonic() < deadline:
         last = await _row(job_id)
@@ -119,7 +119,7 @@ async def test_job_survives_a_killed_worker() -> None:
         running = await _wait_for(
             job_id,
             lambda r: r.status == "running",
-            timeout=30,
+            within=30,
             what="the first worker to claim the job",
         )
         assert running.locked_by is not None
@@ -140,7 +140,7 @@ async def test_job_survives_a_killed_worker() -> None:
     await _wait_for(
         job_id,
         lambda r: r.lease_lapsed,
-        timeout=LEASE_SECONDS + 15,
+        within=LEASE_SECONDS + 15,
         what="the dead worker's lease to lapse",
     )
 
@@ -158,7 +158,7 @@ async def test_job_survives_a_killed_worker() -> None:
         done = await _wait_for(
             job_id,
             lambda r: r.status == "succeeded",
-            timeout=30,
+            within=30,
             what="the second worker to finish the job",
         )
         assert done.attempts == 2  # proof it was genuinely claimed again

@@ -18,6 +18,7 @@ transaction boundary to the caller.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import signal
 
@@ -83,10 +84,8 @@ async def run_reaper(interval: float = 5.0) -> None:
             log.exception("reaper pass failed")
 
         # Sleep, but wake up straight away if we've been asked to shut down.
-        try:
+        with contextlib.suppress(TimeoutError):
             await asyncio.wait_for(stop.wait(), timeout=interval)
-        except asyncio.TimeoutError:
-            pass
 
     log.info("reaper stopped")
 

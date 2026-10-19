@@ -6,14 +6,12 @@ bookkeeping around it.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+import json
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from djq.config import get_settings
-
-import json
 
 CLAIM_SQL = text("""
     WITH ready AS (
@@ -107,14 +105,15 @@ async def enqueue(
     result = await session.execute(INSERT_SQL, params)
     row = result.first()
     if row is not None:
-        return row.id
+        # int() because the driver types the column as Any.
+        return int(row.id)
 
     # DO NOTHING returns no row, so the key was already taken. Look up
     # the job that got there first.
     existing = await session.execute(
         FIND_BY_KEY_SQL, {"idempotency_key": idempotency_key}
     )
-    return existing.scalar_one()
+    return int(existing.scalar_one())
 
 COMPLETE_SQL = text("""
     UPDATE jobs

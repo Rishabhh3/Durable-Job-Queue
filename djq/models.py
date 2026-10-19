@@ -1,6 +1,6 @@
 """Database tables.
-It tells what the table should look like. Alembic turns it into real SQL and sends it to Postgres, creating
-table that has these columns.
+It tells what the table should look like. Alembic turns it into real SQL
+and sends it to Postgres, creating a table with these columns.
 So it is - create the jobs table with these cols, constraints, indexes"""
 
 from __future__ import annotations
@@ -8,7 +8,14 @@ from __future__ import annotations
 from datetime import datetime
 
 from sqlalchemy import (
-    BigInteger, CheckConstraint, DateTime, Index, Integer, String, Text, func,
+    BigInteger,
+    CheckConstraint,
+    DateTime,
+    Index,
+    Integer,
+    String,
+    Text,
+    func,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -25,7 +32,8 @@ class Job(Base):
 
     # --- what to run ---
     job_type: Mapped[str] = mapped_column(String(100), nullable=False)
-    args: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default="{}") # giving empty object rather than null
+    # server_default "{}" gives an empty object rather than null.
+    args: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default="{}")
     idempotency_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
     # str | None = optional
 
@@ -61,8 +69,9 @@ class Job(Base):
         CheckConstraint(
             "status IN ('pending', 'running', 'succeeded', 'dead')",
             name="ck_jobs_status",
-            # This is Postgres refusing to store a status that isn't one of those four. A typo like "suceeded" fails at insert time rather than silently creating a job that no query will ever find again.
-
+            # Postgres refuses to store a status that isn't one of those four.
+            # A typo like "suceeded" fails at insert time rather than quietly
+            # creating a job no query will ever find again.
         ),
         CheckConstraint("attempts >= 0", name="ck_jobs_attempts_non_negative"),
         CheckConstraint("max_attempts >= 1", name="ck_jobs_max_attempts_positive"),

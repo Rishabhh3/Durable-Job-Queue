@@ -1,5 +1,7 @@
 # Durable Job Queue
 
+![tests](https://github.com/Rishabhh3/Durable-Job-Queue/actions/workflows/ci.yml/badge.svg)
+
 A job queue built on plain Postgres, with a small HTTP API for putting work in
 and checking on it.
 

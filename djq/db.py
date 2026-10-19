@@ -21,7 +21,9 @@ from sqlalchemy.ext.asyncio import (
 from djq.config import get_settings
 
 
-@lru_cache(maxsize=1) # means: run this function once, remember the answer, hand the same answer back forever after
+# lru_cache: run this once, remember the answer, hand the same answer back
+# forever after.
+@lru_cache(maxsize=1)
 def get_engine() -> AsyncEngine:
     """Built the first time it's asked for, then shared. Lazy on purpose:
     importing this module should never open a socket."""

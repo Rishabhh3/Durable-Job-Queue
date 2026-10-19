@@ -13,10 +13,10 @@ os.environ["DJQ_DATABASE_URL"] = (
 # The concurrency tests run more workers than the default pool allows.
 os.environ["DJQ_POOL_SIZE"] = "20"
 
-from alembic import command  # noqa: E402
 from alembic.config import Config  # noqa: E402
 from sqlalchemy import text  # noqa: E402
 
+from alembic import command  # noqa: E402
 from djq.config import get_settings  # noqa: E402
 from djq.db import dispose_engine, get_sessionmaker  # noqa: E402
 

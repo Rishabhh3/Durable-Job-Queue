@@ -30,9 +30,27 @@ select = [
     "SIM",  # needless complexity
 ]
 
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's dependency injection is built around calls in argument defaults
+# (`session: AsyncSession = Depends(get_db)`). B008 exists to catch mutable
+# defaults like `def f(x=[])`, which these are not.
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.Query",
+    "fastapi.Path",
+    "fastapi.Body",
+    "fastapi.Header",
+]
+
 [tool.ruff.lint.per-file-ignores]
 # Alembic generates these; don't fight its style.
 "alembic/versions/*" = ["E501"]
+# Throwaway local driver scripts: load_dotenv() has to run before the djq
+# imports, so the imports can't sit at the top of the file.
+"scratch_*.py" = ["E402", "I001"]
+# Same reason: conftest points DJQ_DATABASE_URL at the test database before
+# anything reads settings.
+"tests/conftest.py" = ["E402"]
 
 # ---------------------------------------------------------------------------
 # mypy: type checking

@@ -5,17 +5,13 @@ Revises: 9cbf096de5bd
 Create Date: 2026-09-23 11:35:30.884319
 
 """
-from typing import Sequence, Union
-
-from alembic import op
-import sqlalchemy as sa
-
+from collections.abc import Sequence
 
 # revision identifiers, used by Alembic.
 revision: str = '446c5f673f0a'
-down_revision: Union[str, Sequence[str], None] = '9cbf096de5bd'
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = '9cbf096de5bd'
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:

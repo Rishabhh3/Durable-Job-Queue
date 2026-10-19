@@ -10,11 +10,12 @@ from __future__ import annotations
 import asyncio
 from logging.config import fileConfig
 
-from alembic import context
 from dotenv import load_dotenv
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import create_async_engine
+
+from alembic import context
 
 # This is an entry point, so .env gets loaded here, before anything reads
 # the environment. Same rule as main.py and worker.py.
